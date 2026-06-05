@@ -34,7 +34,8 @@ python -m PyInstaller ^
     "%MAIN_FILE%" ^
     --icon=assets/icon.ico ^
     --add-data "images;images" ^
-    --add-data "assets;assets"
+    --add-data "assets;assets" ^
+    --exclude-module PIL._avif
 
 if errorlevel 1 (
     echo.

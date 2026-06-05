@@ -96,7 +96,8 @@ DEFAULT_CURRENT_VERSION = "2.0.0"
 APP_DISPLAY_NAME = "FH6AutoT"
 APP_ATTRIBUTION = "Based on YOUSTHEONE/FH6Auto"
 DEFAULT_UPSTREAM_REPO_URL = "https://github.com/YOUSTHEONE/FH6Auto"
-DEFAULT_PROJECT_REPO_URL = "https://github.com/CaiSF25/FH6Auto-Fork"
+DEFAULT_UPSTREAM_REPO_URL2 = "https://github.com/CaiSF25/FH6Auto-Fork"
+DEFAULT_PROJECT_REPO_URL = "https://github.com/zfov778/FH6AutoT"
 DEFAULT_UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/CaiSF25/FH6Auto-Fork/refs/heads/main/version.json"
 
 
