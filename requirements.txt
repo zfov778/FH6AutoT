@@ -7,3 +7,6 @@ requests
 pynput
 pillow
 pywin32
+bettercam
+mss
+win11toast

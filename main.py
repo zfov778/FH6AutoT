@@ -1211,6 +1211,21 @@ class FH_UltimateBot(ctk.CTk):
         self.btn_switch_auto.pack()
         # ================================
 
+        # ====== 一键抢车切换按钮 ======
+        self.btn_switch_sniper = ctk.CTkButton(
+            self.btn_left_frame,
+            text="一键抢车",
+            width=180,
+            height=34,
+            corner_radius=10,
+            font=ctk.CTkFont(size=13, weight="bold"),
+            fg_color="#8E44AD",
+            hover_color="#7D3C98",
+            command=self.toggle_auction_sniper_panel
+        )
+        self.btn_switch_sniper.pack(pady=(6, 0))
+        # ================================
+
         self.log_box = ctk.CTkTextbox(
             self.bottom_frame,
             state="disabled",
@@ -1807,6 +1822,10 @@ class FH_UltimateBot(ctk.CTk):
         if self.is_running:
             return
 
+        # 如果一键抢车面板正在运行，先停掉
+        if getattr(self, 'auction_sniper_panel', None) and self.auction_sniper_panel.winfo_exists() and self.auction_sniper_panel._running:
+            self.auction_sniper_panel.force_stop()
+
         self.is_running = True
         self.save_config()
 
@@ -2003,6 +2022,9 @@ class FH_UltimateBot(ctk.CTk):
             if self.is_running:
                 self.log("流水线正在运行，请先停止后再切换自动驾驶！")
                 return
+            # 如果一键抢车面板开着，先关掉
+            if getattr(self, '_sniper_panel_visible', False):
+                self.toggle_auction_sniper_panel()
             self.top_container.pack_forget()
             self.config_frame.pack_forget()
             if hasattr(self, "delay_settings_frame"):
@@ -2021,6 +2043,48 @@ class FH_UltimateBot(ctk.CTk):
             return
         from auto_drive import AutoDrivePanel
         self.auto_drive_panel = AutoDrivePanel(self, self)
+
+    # ====== 一键抢车面板切换 ======
+    def toggle_auction_sniper_panel(self):
+        """切换一键抢车面板的显示/隐藏"""
+        if getattr(self, '_sniper_panel_visible', False):
+            self.auction_sniper_panel.force_stop()
+            self.auction_sniper_panel.pack_forget()
+            self._sniper_panel_visible = False
+            self.btn_switch_sniper.configure(text="一键抢车", fg_color="#8E44AD")
+            self.top_container.pack(before=self.bottom_frame, fill="x", padx=(18, 10), pady=(18, 10))
+            self.config_frame.pack(fill="x", padx=18, pady=(12, 6))
+            if hasattr(self, "delay_settings_frame"):
+                self.delay_settings_frame.pack(before=self.bottom_frame, fill="x", padx=18, pady=(10, 0))
+            self.calc_frame.pack(before=self.bottom_frame, fill="x", padx=18, pady=(10, 0))
+            if hasattr(self, "global_settings_frame"):
+                self.global_settings_frame.pack(before=self.bottom_frame, fill="x", padx=18, pady=(15, 0))
+        else:
+            if self.is_running:
+                self.log("流水线正在运行，请先停止后再切换一键抢车！")
+                return
+            # 如果自动驾驶面板开着，先关掉
+            if getattr(self, '_auto_panel_visible', False):
+                self.toggle_auto_drive_panel()
+            self.top_container.pack_forget()
+            self.config_frame.pack_forget()
+            if hasattr(self, "delay_settings_frame"):
+                self.delay_settings_frame.pack_forget()
+            self.calc_frame.pack_forget()
+            if hasattr(self, "global_settings_frame"):
+                self.global_settings_frame.pack_forget()
+            self._ensure_auction_sniper_panel()
+            self.auction_sniper_panel.pack(before=self.bottom_frame, fill="x", padx=18, pady=(12, 6))
+            self._sniper_panel_visible = True
+            self.btn_switch_sniper.configure(text="返回流水线", fg_color="#DA3633")
+
+    def _ensure_auction_sniper_panel(self):
+        """延迟创建一键抢车面板"""
+        if hasattr(self, 'auction_sniper_panel'):
+            return
+        from auction_sniper_panel import AuctionSniperPanel
+        self.auction_sniper_panel = AuctionSniperPanel(self, self)
+    # ================================
 
     def _enter_auto_drive_mini(self, mini_frame, mini_log_box):
         """进入自动驾驶迷你模式"""
@@ -2088,16 +2152,25 @@ class FH_UltimateBot(ctk.CTk):
         auto_was_running = (hasattr(self, 'auto_drive_panel')
                             and self.auto_drive_panel.winfo_exists()
                             and self.auto_drive_panel._running)
+        # 检查是否是一键抢车在运行
+        sniper_was_running = (hasattr(self, 'auction_sniper_panel')
+                              and self.auction_sniper_panel.winfo_exists()
+                              and self.auction_sniper_panel._running)
 
         if not self.is_running:
-            # F8 全局停止也要关掉自动驾驶
+            # F8 全局停止也要关掉自动驾驶和一键抢车
             if auto_was_running:
                 self.auto_drive_panel.force_stop()
+            if sniper_was_running:
+                self.auction_sniper_panel.force_stop()
             return
 
         # 如果自动驾驶面板正在运行，先停掉（_stop 会自己恢复 UI）
         if auto_was_running:
             self.auto_drive_panel.force_stop()
+        # 如果一键抢车面板正在运行，先停掉
+        if sniper_was_running:
+            self.auction_sniper_panel.force_stop()
 
         for key in DIK_CODES.keys():
             self.hw_key_up(key)
@@ -2111,7 +2184,7 @@ class FH_UltimateBot(ctk.CTk):
             pass
 
         # 只有流水线运行时才恢复流水线 UI
-        if not auto_was_running:
+        if not auto_was_running and not sniper_was_running:
             def restore_ui():
                 if hasattr(self, "mini_frame"):
                     self.mini_frame.pack_forget()
@@ -4955,7 +5028,9 @@ class FH_UltimateBot(ctk.CTk):
 
         self.game_click(brand_pos)
         time.sleep(0.8)
-        
+        self.hw_press("enter")
+        time.sleep(1.5)
+
         self.log("开始删除最近获得的车辆！！！请人工确认是否移除")
         
         not_found_pages = 0

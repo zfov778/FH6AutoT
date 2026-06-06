@@ -121,13 +121,14 @@ class StoppableSleep:
 class _BaseWorker(threading.Thread):
     """自动驾驶工作线程基类"""
 
-    def __init__(self, app, stop_check, pause_check=None):
+    def __init__(self, app, stop_check, pause_check=None, on_failed=None):
         super().__init__(daemon=True)
         self._app = app
         self._stop = stop_check
         self._pause = pause_check
         self._ss = StoppableSleep(stop_check, pause_check)
         self.completed = 0
+        self._on_failed = on_failed
 
     # -- 按键快捷方法，直接调主 App 的硬件接口 --
     def _kd(self, key):
@@ -338,51 +339,76 @@ class _DeliveryWorker(_BaseWorker):
 class _DeliveryTelemetryWorker(_BaseWorker):
     """送外卖-遥测：读取 Forza UDP 数据，根据实时车速辅助驾驶"""
 
-    def __init__(self, app, stop_check, pause_check, telemetry_config):
-        super().__init__(app, stop_check, pause_check)
+    def __init__(self, app, stop_check, pause_check, telemetry_config, on_failed=None):
+        super().__init__(app, stop_check, pause_check, on_failed=on_failed)
         self._telem_ip = telemetry_config.get("ip", "127.0.0.1")
         self._telem_port = telemetry_config.get("port", 1000)
         self._telem = None
 
-    def run(self):
-        self._log(f"[自动驾驶-送外卖-遥测] 开始，UDP {self._telem_ip}:{self._telem_port}")
+    def _signal_failed(self, msg):
+        """通知面板启动失败"""
+        self._log(msg)
+        self._release_all()
+        if self._on_failed:
+            self._on_failed()
 
-        # 启动遥测
+    def run(self):
+        self._log(f"[送外卖-遥测] 启动 UDP {self._telem_ip}:{self._telem_port}")
+
+        # 1. 启动遥测监听
         self._telem = TelemetryReceiver(self._telem_ip, self._telem_port)
         if not self._telem.start():
-            self._log("[自动驾驶-送外卖-遥测] 遥测绑定失败！请确认游戏 Data Out 已开启且 IP/端口正确")
-            self._release_all()
+            self._signal_failed(
+                "[送外卖-遥测] 端口绑定失败！"
+                "请确认：① 游戏内 Data Out 已开启 ② IP/端口设置正确 ③ 端口未被占用")
             return
 
-        self._log("[自动驾驶-送外卖-遥测] 遥测已连接，开始驾驶循环")
+        self._log("[送外卖-遥测] 监听已就绪，等待游戏数据帧 (最多 5 秒)...")
 
-        # 按住 W 前进
+        # 2. 等待第一帧真实数据（不是只 bind，要真收到包）
+        telemetry_active = False
+        wait_deadline = time.time() + 5.0
+        while time.time() < wait_deadline:
+            if self._stop():
+                self._telem.stop()
+                self._release_all()
+                return
+            data = self._telem.get_latest()
+            if data.get("speed_kmh", 0.0) > 0.01 or data.get("is_race_on", False):
+                telemetry_active = True
+                break
+            time.sleep(0.1)
+
+        if telemetry_active:
+            data = self._telem.get_latest()
+            self._log(f"[送外卖-遥测] ✓ 数据连接成功！"
+                      f"速度 {data.get('speed_kmh', 0):.1f} km/h，"
+                      f"车辆等级 {data.get('car_class', -1)}")
+        else:
+            self._log("[送外卖-遥测] ⚠ 5 秒内未收到遥测数据！"
+                      "将以纯按键兜底模式驾驶（W + 每 60s Enter）")
+
+        # 3. 开始驾驶
+        self._log("[送外卖-遥测] 按住 W，开始驾驶...")
         self._kd('w')
         stuck_start = 0.0
         last_enter = time.time()
         last_speed = 0.0
-        enter_interval = 60  # 默认每 60 秒按一次 Enter
-        telemetry_active = False  # 是否成功收到过数据包
+        enter_interval = 60
 
         try:
             while not self._stop():
                 data = self._telem.get_latest()
                 speed = data.get("speed_kmh", 0.0)
-                is_race_on = data.get("is_race_on", False)
-
-                # 检测是否收到遥测数据
-                if speed > 0.01 and not telemetry_active:
-                    telemetry_active = True
-                    self._log(f"[送外卖-遥测] 数据帧已接收 · 速度 {speed:.1f} km/h")
 
                 now = time.time()
 
-                # ---- 卡住检测：速度持续接近 0 ----
+                # ---- 卡住检测：仅遥测活跃时生效 ----
                 if telemetry_active and speed <= 2.0:
                     if stuck_start == 0:
                         stuck_start = now
                     elif now - stuck_start >= 8:
-                        self._log(f"[送外卖-遥测] 可能已到达或卡住(静止 {now - stuck_start:.0f}s)，按 Enter")
+                        self._log(f"[送外卖-遥测] 静止 {now - stuck_start:.0f}s，按 Enter")
                         self._kp('enter')
                         self.completed += 1
                         self._log(f"[送外卖-遥测] 完成第 {self.completed} 单")
@@ -393,7 +419,7 @@ class _DeliveryTelemetryWorker(_BaseWorker):
                 else:
                     stuck_start = 0
 
-                # ---- 速度骤降检测（从高速突然到低速，可能到达） ----
+                # ---- 速度骤降检测 ----
                 if last_speed >= 30 and speed <= 1 and telemetry_active:
                     self._log(f"[送外卖-遥测] 速度骤降 {last_speed:.0f}→{speed:.0f} km/h，疑似到达")
                     self._ss.sleep(2)
@@ -413,7 +439,7 @@ class _DeliveryTelemetryWorker(_BaseWorker):
                 if now - last_enter >= enter_interval:
                     self._kp('enter')
                     last_enter = now
-                    self._log(f"[送外卖-遥测] 定时 Enter 兜底")
+                    self._log(f"[送外卖-遥测] 定时 Enter")
 
                 last_speed = speed
 
@@ -425,7 +451,7 @@ class _DeliveryTelemetryWorker(_BaseWorker):
             self._release_all()
             if self._telem:
                 self._telem.stop()
-        self._log(f"[自动驾驶-送外卖-遥测] 已停止，共完成 {self.completed} 单")
+        self._log(f"[送外卖-遥测] 已停止，共完成 {self.completed} 单")
 
 
 # ============================================================
@@ -720,7 +746,9 @@ class AutoDrivePanel(ctk.CTkFrame):
                 "ip": self._telem_ip_var.get().strip() or "127.0.0.1",
                 "port": int(self._telem_port_var.get().strip() or "1000"),
             }
-            self._worker = _DeliveryTelemetryWorker(self._app, stop_check, pause_check, telem_config)
+            self._worker = _DeliveryTelemetryWorker(
+                self._app, stop_check, pause_check, telem_config,
+                on_failed=lambda: self._app.after(0, self._on_worker_start_failed))
         else:
             self._worker = _DeliveryWorker(self._app, stop_check, pause_check, vision_mode=False)
 
@@ -738,6 +766,18 @@ class AutoDrivePanel(ctk.CTkFrame):
         self._app._enter_auto_drive_mini(self._mini_frame, self._mini_log_box)
         self._start_time = time.time()
         self._update_mini_timer()
+
+    def _on_worker_start_failed(self):
+        """遥测 Worker 启动失败的回调（主线程）"""
+        self._app.log("[自动驾驶] 启动失败，请检查遥测设置")
+        self._running = False
+        self._app.is_running = False
+        self._worker = None
+        self._btn_start.configure(text="启动自动驾驶", fg_color="#27AE60",
+                                  hover_color="#1E8449", state="normal")
+        self._btn_stop.configure(state="disabled")
+        self._mode_menu.configure(state="normal")
+        self._lbl_status.configure(text="启动失败 · 检查遥测设置", text_color="#DA3633")
 
     def _stop(self):
         self._app.log("[自动驾驶] 正在停止...")
