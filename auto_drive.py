@@ -563,6 +563,8 @@ class AutoDrivePanel(ctk.CTkFrame):
             corner_radius=6, font=ctk.CTkFont(size=13)
         )
         self._entry_telem_port.pack(side="left", padx=(0, 15))
+        # 限制端口号只能输入正整数
+        self._entry_telem_port.bind("<FocusOut>", self._clean_port)
 
         self._btn_telem_test = ctk.CTkButton(
             telem_row, text="测试连接", width=90, height=28,
@@ -696,7 +698,7 @@ class AutoDrivePanel(ctk.CTkFrame):
             fg_color="#DA3633", hover_color="#B02A37",
             font=ctk.CTkFont(weight="bold"), command=self._stop
         )
-        self._btn_mini_stop.pack(side="left", fill="y", padx=(5, 10), pady=10)
+        self._btn_mini_stop.pack(side="left", padx=(5, 10), pady=10)
 
     def _update_mini_timer(self):
         if not self._running:
@@ -811,6 +813,25 @@ class AutoDrivePanel(ctk.CTkFrame):
         self._mode_menu.configure(state="normal")
         self._lbl_status.configure(text="就绪 · 等待启动", text_color="#888888")
         self._app.log("[自动驾驶] 已停止")
+
+    @staticmethod
+    def _clean_port(_e=None):
+        """清理端口输入，只允许正整数"""
+        try:
+            raw = _e.widget.get()
+            v = "".join(c for c in raw if c.isdigit())
+            if v == "":
+                v = "1000"
+            iv = int(v)
+            if iv < 1:
+                iv = 1
+            if iv > 65535:
+                iv = 65535
+            if str(iv) != raw:
+                _e.widget.delete(0, "end")
+                _e.widget.insert(0, str(iv))
+        except Exception:
+            pass
 
     def force_stop(self):
         """由主 App 调用（F8 全局停止时）"""

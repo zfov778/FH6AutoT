@@ -92,7 +92,7 @@ CACHE_DIR = os.path.join(APP_DIR, "cache")
 TEMPLATE_CACHE_FILE = os.path.join(CACHE_DIR, "template_cache.pkl")
 TEMPLATE_META_FILE = os.path.join(CACHE_DIR, "template_meta.json")
 LOCAL_VERSION_FILE = os.path.join(APP_DIR, "version.json")
-DEFAULT_CURRENT_VERSION = "2.0.0"
+DEFAULT_CURRENT_VERSION = "2.2.0"
 APP_DISPLAY_NAME = "FH6AutoT"
 APP_ATTRIBUTION = "Based on YOUSTHEONE/FH6Auto"
 DEFAULT_UPSTREAM_REPO_URL = "https://github.com/YOUSTHEONE/FH6Auto"
@@ -477,6 +477,50 @@ class FH_UltimateBot(ctk.CTk):
             entry_widget.delete(0, "end")
             entry_widget.insert(0, str(default_value))
 
+    @staticmethod
+    def _make_int_only_entry(entry, min_val=1):
+        """限制输入框只能输入正整数，FocusOut 时自动清理非法字符"""
+        def _clean(_e=None):
+            try:
+                raw = entry.get()
+                v = "".join(c for c in raw if c.isdigit())
+                if v == "":
+                    v = str(min_val)
+                iv = int(v)
+                if iv < min_val:
+                    iv = min_val
+                if iv != int(v) or v != raw:
+                    entry.delete(0, "end")
+                    entry.insert(0, str(iv))
+            except Exception:
+                entry.delete(0, "end")
+                entry.insert(0, str(min_val))
+        entry.bind("<FocusOut>", _clean)
+
+    @staticmethod
+    def _make_float_only_entry(entry, min_val=0.0):
+        """限制输入框只能输入正浮点数"""
+        def _clean(_e=None):
+            try:
+                raw = entry.get()
+                v = "".join(c for c in raw if c.isdigit() or c == ".")
+                # 只保留第一个小数点
+                parts = v.split(".")
+                if len(parts) > 2:
+                    v = parts[0] + "." + "".join(parts[1:])
+                if v == "" or v == ".":
+                    v = str(min_val)
+                fv = float(v)
+                if fv < min_val:
+                    fv = min_val
+                if fv != float(v) or v != raw:
+                    entry.delete(0, "end")
+                    entry.insert(0, str(fv))
+            except Exception:
+                entry.delete(0, "end")
+                entry.insert(0, str(min_val))
+        entry.bind("<FocusOut>", _clean)
+
     def should_reset_cj_memory_on_new_loop(self):
         try:
             next_after_cj = int(self.entry_next3.get())
@@ -757,6 +801,7 @@ class FH_UltimateBot(ctk.CTk):
                 entry = ctk.CTkEntry(frame, width=95, height=34, justify="center", corner_radius=8)
                 entry.insert(0, str(def_val))
                 entry.pack(pady=8)
+                self._make_int_only_entry(entry)
 
                 lbl = ctk.CTkLabel(
                     frame,
@@ -782,6 +827,7 @@ class FH_UltimateBot(ctk.CTk):
             entry = ctk.CTkEntry(frame, width=48, height=30, justify="center", corner_radius=8)
             entry.insert(0, str(def_step))
             entry.pack(side="left", padx=(0, 8))
+            self._make_int_only_entry(entry)
 
             chk = ctk.CTkCheckBox(frame, text="继续", variable=var_checked, width=60)
             chk.pack(side="left", padx=(0, 8))
@@ -877,6 +923,7 @@ class FH_UltimateBot(ctk.CTk):
         self.entry_cj = ctk.CTkEntry(left_cj, width=95, height=34, justify="center", corner_radius=8)
         self.entry_cj.insert(0, str(self.config.get("cj_count", 30)))
         self.entry_cj.pack(pady=5)
+        self._make_int_only_entry(self.entry_cj)
 
         self.lbl_cj = ctk.CTkLabel(
             left_cj,
@@ -973,6 +1020,7 @@ class FH_UltimateBot(ctk.CTk):
         self.entry_sell_attempts = ctk.CTkEntry(scan_frame, width=50, height=26, justify="center", corner_radius=6)
         self.entry_sell_attempts.insert(0, str(self.config.get("sell_scan_attempts", 5)))
         self.entry_sell_attempts.pack(side="left")
+        self._make_int_only_entry(self.entry_sell_attempts)
         # ==========================================
         self.entry_next4, self.chk4 = add_next_step(box_sc, self.var_chk4, self.config.get("next_4", 5))
 
@@ -1002,6 +1050,7 @@ class FH_UltimateBot(ctk.CTk):
         self.entry_global_loop = ctk.CTkEntry(self.global_settings_frame, width=70, height=28, justify="center")
         self.entry_global_loop.insert(0, str(self.config.get("global_loops", 10)))
         self.entry_global_loop.pack(side="left", padx=(0, 20))
+        self._make_int_only_entry(self.entry_global_loop)
         self.var_auto_restart = ctk.BooleanVar(value=self.config.get("auto_restart", True))
         self.var_show_delay = ctk.BooleanVar(value=self.config.get("show_delay_during_run", False))
         self.cb_auto_restart = ctk.CTkCheckBox(self.global_settings_frame, text="游戏闪退（爆显存）自动重启", variable=self.var_auto_restart)
@@ -1165,15 +1214,15 @@ class FH_UltimateBot(ctk.CTk):
         self.lbl_mini_time = ctk.CTkLabel(self.mini_info_frame, text="总耗时: 00:00:00", font=ctk.CTkFont(size=13))
         self.lbl_mini_time.pack(pady=2, anchor="w")
         # 3. 按钮区 (靠右排列)
-        self.btn_mini_stop = ctk.CTkButton(self.mini_frame, text="⏸ 停止 (F8)", fg_color="#DA3633", hover_color="#B02A37", width=90, font=ctk.CTkFont(weight="bold"), command=self.stop_all)
-        self.btn_mini_stop.pack(side="left", fill="y", padx=5, pady=10)
+        self.btn_mini_stop = ctk.CTkButton(self.mini_frame, text="⏸ 停止 (F8)", fg_color="#DA3633", hover_color="#B02A37", width=90, height=38, font=ctk.CTkFont(weight="bold"), command=self.stop_all)
+        self.btn_mini_stop.pack(side="left", padx=5, pady=10)
 
         # ====== 【新增】迷你面板上的暂停按钮 ======
-        self.btn_mini_pause = ctk.CTkButton(self.mini_frame, text="⏸ 暂停 (F9)", fg_color="#F1C40F", hover_color="#D4AC0D", width=90, font=ctk.CTkFont(weight="bold"), command=self.toggle_pause)
-        self.btn_mini_pause.pack(side="left", fill="y", padx=5, pady=10)
+        self.btn_mini_pause = ctk.CTkButton(self.mini_frame, text="⏸ 暂停 (F9)", fg_color="#F1C40F", hover_color="#D4AC0D", width=90, height=38, font=ctk.CTkFont(weight="bold"), command=self.toggle_pause)
+        self.btn_mini_pause.pack(side="left", padx=5, pady=10)
 
-        self.btn_mini_support = ctk.CTkButton(self.mini_frame, text="关于", fg_color="#F97316", hover_color="#EA580C", width=60, font=ctk.CTkFont(weight="bold"), command=self.open_support_window)
-        self.btn_mini_support.pack(side="left", fill="y", padx=(5, 10), pady=10)
+        self.btn_mini_support = ctk.CTkButton(self.mini_frame, text="关于", fg_color="#F97316", hover_color="#EA580C", width=60, height=38, font=ctk.CTkFont(weight="bold"), command=self.open_support_window)
+        self.btn_mini_support.pack(side="left", padx=(5, 10), pady=10)
 
 
         self.bottom_frame = ctk.CTkFrame(self, fg_color="transparent", height=200)
@@ -2141,6 +2190,64 @@ class FH_UltimateBot(ctk.CTk):
 
         # 恢复窗口
         self.btn_switch_auto.configure(text="返回流水线", fg_color="#DA3633")
+        self.attributes("-topmost", False)
+        self.geometry("1348x880")
+        self.center_window()
+
+    def _enter_sniper_mini(self, mini_frame, mini_log_box):
+        """进入一键抢车迷你模式"""
+        # 隐藏主界面元素
+        if hasattr(self, "top_container"):
+            self.top_container.pack_forget()
+        self.config_frame.pack_forget()
+        if hasattr(self, "global_settings_frame"):
+            self.global_settings_frame.pack_forget()
+        if hasattr(self, "calc_frame"):
+            self.calc_frame.pack_forget()
+        if hasattr(self, "delay_settings_frame"):
+            self.delay_settings_frame.pack_forget()
+        if hasattr(self, "bottom_frame"):
+            self.bottom_frame.pack_forget()
+        if hasattr(self, "auction_sniper_panel") and self._sniper_panel_visible:
+            self.auction_sniper_panel.pack_forget()
+
+        # 设置迷你日志框引用（log() 方法会同时写入）
+        self.mini_log_box = mini_log_box
+
+        # 显示迷你框架
+        mini_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # 计算窗口尺寸并定位到右上角
+        last_x, last_y, last_w, last_h = self.regions.get("全界面", (0, 0, self.winfo_screenwidth(), self.winfo_screenheight()))
+        if last_w <= 0:
+            last_w = self.winfo_screenwidth()
+        if last_h <= 0:
+            last_h = self.winfo_screenheight()
+
+        calc_w = max(int(last_w * 0.35), 620)
+        calc_h = 180
+        pos_x = last_x + last_w - calc_w - 20
+        pos_y = last_y + 20
+
+        self.attributes("-topmost", True)
+        self.geometry(f"{calc_w}x{calc_h}+{pos_x}+{pos_y}")
+
+    def _exit_sniper_mini(self, mini_frame):
+        """退出一键抢车迷你模式，恢复抢车全面板"""
+        mini_frame.pack_forget()
+
+        # 清除迷你日志引用
+        if hasattr(self, "mini_log_box"):
+            del self.mini_log_box
+
+        # 恢复抢车面板和底部
+        if hasattr(self, "bottom_frame"):
+            self.bottom_frame.pack(fill="both", expand=True, padx=18, pady=(6, 12))
+        if hasattr(self, "auction_sniper_panel") and self._sniper_panel_visible:
+            self.auction_sniper_panel.pack(before=self.bottom_frame, fill="x", padx=18, pady=(12, 6))
+
+        # 恢复窗口
+        self.btn_switch_sniper.configure(text="返回流水线", fg_color="#DA3633")
         self.attributes("-topmost", False)
         self.geometry("1348x880")
         self.center_window()
@@ -3598,6 +3705,8 @@ class FH_UltimateBot(ctk.CTk):
             screen_bgr = self.capture_region(region)
             screen_gray = cv2.cvtColor(screen_bgr, cv2.COLOR_BGR2GRAY)
             scales_to_try = self.get_scales_to_try(fast_mode=fast_mode)
+            best_val = 0.0
+            best_scale = 1.0
             for scale in scales_to_try:
                 tpl_gray = self.load_template_gray(template_path)
                 if tpl_gray is None:
@@ -3609,13 +3718,16 @@ class FH_UltimateBot(ctk.CTk):
                     continue
                 res = cv2.matchTemplate(screen_gray, tpl_gray, cv2.TM_CCOEFF_NORMED)
                 _, max_val, _, max_loc = cv2.minMaxLoc(res)
+                if max_val > best_val:
+                    best_val = max_val
+                    best_scale = scale
                 if max_val >= threshold:
-                    # 【新增】：灰度图匹配的得分日志
                     self.log(f"[GrayMatch] 命中: {template_path} | 灰度得分: {max_val:.3f} (阈值 {threshold}) | 缩放比: {scale:.3f}")
                     return (
                         max_loc[0] + w // 2 + (region[0] if region else 0),
                         max_loc[1] + h // 2 + (region[1] if region else 0),
                     )
+            self.log(f"[GrayMatch] 未命中: {template_path} | 最佳得分: {best_val:.3f} (阈值 {threshold}) | 最佳缩放: {best_scale:.3f}")
             return None
         except Exception as e:
             self.log(f"find_image_gray 异常: {e}")
@@ -5069,32 +5181,43 @@ class FH_UltimateBot(ctk.CTk):
             
             self.log("精准锁定目标车辆，执行点击...")
             self.game_click(pos_target)
-            time.sleep(1.2) # 等待点击后的反应
-            
-            # ==========================================
-            # 核心逻辑：寻找 removecar.png (从车库移除)
-            # ==========================================
+            time.sleep(0.8)
+
+            # 先尝试直接找按钮（部分车辆详情页直接显示），找不到则按 Enter 呼出菜单
             self.log("寻找 '从车库移除' 按钮...")
-            pos_remove = self.find_image_gray("removecar.png", region=self.regions["全界面"], threshold=0.75, fast_mode=True)
-            
+            pos_remove = self.find_image_gray("removecar.png", region=self.regions["全界面"], threshold=0.70, fast_mode=True)
+
             if pos_remove:
                 self.log("直接找到移除按钮，点击...")
                 self.game_click(pos_remove)
             else:
-                self.log("未直接找到移除按钮，按下 Enter 呼出菜单...")
+                self.log("未直接找到，按下 Enter 呼出菜单...")
                 self.hw_press("enter")
-                time.sleep(0.8) # 等待菜单弹出动画
-                
-                # 再次寻找
-                pos_remove = self.find_image_gray("removecar.png", region=self.regions["全界面"], threshold=0.75, fast_mode=True)
-                if pos_remove:
-                    self.log("呼出菜单后找到移除按钮，点击...")
-                    self.game_click(pos_remove)
-                else:
-                    self.log("仍未找到移除按钮，可能点错了/该车无法移除，按 ESC 放弃该车...")
+                time.sleep(1.2)  # 等待菜单弹出
+
+                # 渐进阈值搜索
+                found = False
+                for thresh in [0.70, 0.65]:
+                    pos_remove = self.find_image_gray("removecar.png", region=self.regions["全界面"], threshold=thresh, fast_mode=True)
+                    if pos_remove:
+                        self.log(f"呼出菜单后找到移除按钮 (阈值 {thresh})，点击...")
+                        self.game_click(pos_remove)
+                        found = True
+                        break
+
+                if not found:
+                    self.log("快速搜索均失败，尝试全量缩放比...")
+                    pos_remove = self.find_image_gray("removecar.png", region=self.regions["全界面"], threshold=0.60, fast_mode=False)
+                    if pos_remove:
+                        self.log("全量缩放比搜索找到移除按钮，点击...")
+                        self.game_click(pos_remove)
+                        found = True
+
+                if not found:
+                    self.log("未找到移除按钮，可能该车无法移除，按 ESC 放弃该车...")
                     self.hw_press("esc")
                     time.sleep(1.0)
-                    self.hw_press("right") # 往右挪一格，防止死循环一直点这辆假车
+                    self.hw_press("right")
                     time.sleep(1.2)
                     continue
                     
