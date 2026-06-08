@@ -5181,45 +5181,38 @@ class FH_UltimateBot(ctk.CTk):
             
             self.log("精准锁定目标车辆，执行点击...")
             self.game_click(pos_target)
-            time.sleep(0.8)
+            time.sleep(0.5)
 
-            # 先尝试直接找按钮（部分车辆详情页直接显示），找不到则按 Enter 呼出菜单
+            self.log("按下 Enter 呼出菜单...")
+            self.hw_press("enter")
+            time.sleep(1.2)
+
+            # 渐进阈值搜索
             self.log("寻找 '从车库移除' 按钮...")
-            pos_remove = self.find_image_gray("removecar.png", region=self.regions["全界面"], threshold=0.70, fast_mode=True)
+            found = False
+            for thresh in [0.70, 0.65]:
+                pos_remove = self.find_image_gray("removecar.png", region=self.regions["全界面"], threshold=thresh, fast_mode=True)
+                if pos_remove:
+                    self.log(f"找到移除按钮 (阈值 {thresh})，点击...")
+                    self.game_click(pos_remove)
+                    found = True
+                    break
 
-            if pos_remove:
-                self.log("直接找到移除按钮，点击...")
-                self.game_click(pos_remove)
-            else:
-                self.log("未直接找到，按下 Enter 呼出菜单...")
-                self.hw_press("enter")
-                time.sleep(1.2)  # 等待菜单弹出
+            if not found:
+                self.log("快速搜索均失败，尝试全量缩放比...")
+                pos_remove = self.find_image_gray("removecar.png", region=self.regions["全界面"], threshold=0.60, fast_mode=False)
+                if pos_remove:
+                    self.log("全量缩放比搜索找到移除按钮，点击...")
+                    self.game_click(pos_remove)
+                    found = True
 
-                # 渐进阈值搜索
-                found = False
-                for thresh in [0.70, 0.65]:
-                    pos_remove = self.find_image_gray("removecar.png", region=self.regions["全界面"], threshold=thresh, fast_mode=True)
-                    if pos_remove:
-                        self.log(f"呼出菜单后找到移除按钮 (阈值 {thresh})，点击...")
-                        self.game_click(pos_remove)
-                        found = True
-                        break
-
-                if not found:
-                    self.log("快速搜索均失败，尝试全量缩放比...")
-                    pos_remove = self.find_image_gray("removecar.png", region=self.regions["全界面"], threshold=0.60, fast_mode=False)
-                    if pos_remove:
-                        self.log("全量缩放比搜索找到移除按钮，点击...")
-                        self.game_click(pos_remove)
-                        found = True
-
-                if not found:
-                    self.log("未找到移除按钮，可能该车无法移除，按 ESC 放弃该车...")
-                    self.hw_press("esc")
-                    time.sleep(1.0)
-                    self.hw_press("right")
-                    time.sleep(1.2)
-                    continue
+            if not found:
+                self.log("未找到移除按钮，可能该车无法移除，按 ESC 放弃该车...")
+                self.hw_press("esc")
+                time.sleep(1.0)
+                self.hw_press("right")
+                time.sleep(1.2)
+                continue
                     
             time.sleep(0.8) # 等待“你确定要移除吗”的确认弹窗
             
