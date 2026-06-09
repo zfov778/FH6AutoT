@@ -643,7 +643,7 @@ class FH_UltimateBot(ctk.CTk):
             self.config["spin_count"] = int(self.entry_spin.get())
             if hasattr(self, "opt_sell_mode"):
                 val = self.opt_sell_mode.get()
-                if "模式1" in val:
+                if "识图移除" in val:
                     self.config["sell_mode"] = 1
                 else:
                     self.config["sell_mode"] = 2
@@ -651,6 +651,8 @@ class FH_UltimateBot(ctk.CTk):
                 self.config["sell_scan_attempts"] = int(self.entry_sell_attempts.get())
             if hasattr(self, "var_winter"):
                 self.config["winter_mode"] = self.var_winter.get()
+            if hasattr(self, "var_first_esc"):
+                self.config["first_esc"] = self.var_first_esc.get()
         except Exception:
             pass
 
@@ -839,7 +841,8 @@ class FH_UltimateBot(ctk.CTk):
         self.var_chk3 = ctk.BooleanVar(value=self.config["chk_3"])
         self.var_chk4 = ctk.BooleanVar(value=self.config.get("chk_4", True))
         self.var_chk5 = ctk.BooleanVar(value=self.config.get("chk_5", True))
-        self.var_winter = ctk.BooleanVar(value=self.config.get("winter_mode", False))
+        self.var_winter = ctk.BooleanVar(value=self.config.get("winter_mode", True))
+        self.var_first_esc = ctk.BooleanVar(value=self.config.get("first_esc", False))
 
         box_race, self.btn_race, self.entry_race, self.lbl_race = create_box(
             self.config_frame,
@@ -990,37 +993,39 @@ class FH_UltimateBot(ctk.CTk):
             "#D97706",
             self.config.get("sc_count", 30),
         )
-        # ====== 【新增】：移除车辆模式下拉选择 ======
+        # 尝试次数 + 模式选择（同一行，居中）
+        scan_row = ctk.CTkFrame(box_sc, fg_color="transparent")
+        scan_row.pack(pady=(2, 1))
+        ctk.CTkLabel(scan_row, text="尝试次数:", font=ctk.CTkFont(size=10), text_color="#A0A0A0").pack(side="left", padx=(0, 2))
+        self.entry_sell_attempts = ctk.CTkEntry(scan_row, width=36, height=20, justify="center", corner_radius=4)
+        self.entry_sell_attempts.insert(0, str(self.config.get("sell_scan_attempts", 5)))
+        self.entry_sell_attempts.pack(side="left")
+        self._make_int_only_entry(self.entry_sell_attempts)
+
+        ctk.CTkLabel(scan_row, text="  模式:", font=ctk.CTkFont(size=10), text_color="#A0A0A0").pack(side="left", padx=(6, 2))
         self.opt_sell_mode = ctk.CTkOptionMenu(
-            box_sc,
-            values=["模式1: 识图移除模式", "模式2: 移除最近添加"],
-            width=180,
-            height=28,
-            corner_radius=6,
-            font=ctk.CTkFont(size=12),
+            scan_row,
+            values=["识图移除", "移除添加"],
+            width=70,
+            height=20,
+            corner_radius=4,
+            font=ctk.CTkFont(size=10),
             fg_color="#D97706",
             button_color="#B96705",
             button_hover_color="#995704"
         )
-        # 读取配置，默认选模式1
         saved_mode = self.config.get("sell_mode", 1)
         if str(saved_mode) == "1" or "模式1" in str(saved_mode):
-            self.opt_sell_mode.set("模式1: 识图移除模式")
+            self.opt_sell_mode.set("识图移除")
         else:
-            self.opt_sell_mode.set("模式2: 移除最近添加")
-            
-        self.opt_sell_mode.pack(pady=4)
+            self.opt_sell_mode.set("移除添加")
+        self.opt_sell_mode.pack(side="left")
 
         self.cb_winter = ctk.CTkCheckBox(box_sc, text="冬季模式 (筛选按键次数+2)", variable=self.var_winter, font=ctk.CTkFont(size=12))
-        self.cb_winter.pack(pady=2)
+        self.cb_winter.pack(pady=(0, 1))
 
-        scan_frame = ctk.CTkFrame(box_sc, fg_color="transparent")
-        scan_frame.pack(pady=2)
-        ctk.CTkLabel(scan_frame, text="尝试次数:", font=ctk.CTkFont(size=12), text_color="#A0A0A0").pack(side="left", padx=(0, 5))
-        self.entry_sell_attempts = ctk.CTkEntry(scan_frame, width=50, height=26, justify="center", corner_radius=6)
-        self.entry_sell_attempts.insert(0, str(self.config.get("sell_scan_attempts", 5)))
-        self.entry_sell_attempts.pack(side="left")
-        self._make_int_only_entry(self.entry_sell_attempts)
+        self.cb_first_esc = ctk.CTkCheckBox(box_sc, text="首次扫描按ESC (关闭残留菜单)", variable=self.var_first_esc, font=ctk.CTkFont(size=12))
+        self.cb_first_esc.pack(pady=(0, 2))
         # ==========================================
         self.entry_next4, self.chk4 = add_next_step(box_sc, self.var_chk4, self.config.get("next_4", 5))
 
@@ -1258,21 +1263,6 @@ class FH_UltimateBot(ctk.CTk):
             command=self.toggle_auto_drive_panel
         )
         self.btn_switch_auto.pack()
-        # ================================
-
-        # ====== 一键抢车切换按钮 ======
-        self.btn_switch_sniper = ctk.CTkButton(
-            self.btn_left_frame,
-            text="一键抢车",
-            width=180,
-            height=34,
-            corner_radius=10,
-            font=ctk.CTkFont(size=13, weight="bold"),
-            fg_color="#8E44AD",
-            hover_color="#7D3C98",
-            command=self.toggle_auction_sniper_panel
-        )
-        self.btn_switch_sniper.pack(pady=(6, 0))
         # ================================
 
         self.log_box = ctk.CTkTextbox(
@@ -1871,10 +1861,6 @@ class FH_UltimateBot(ctk.CTk):
         if self.is_running:
             return
 
-        # 如果一键抢车面板正在运行，先停掉
-        if getattr(self, 'auction_sniper_panel', None) and self.auction_sniper_panel.winfo_exists() and self.auction_sniper_panel._running:
-            self.auction_sniper_panel.force_stop()
-
         self.is_running = True
         self.save_config()
 
@@ -1960,7 +1946,7 @@ class FH_UltimateBot(ctk.CTk):
                     elif step_name == "sell":
                         # ====== 【新增】：判断下拉框的模式 ======
                         sell_mode = self.opt_sell_mode.get()
-                        if "模式1" in sell_mode:
+                        if "识图移除" in sell_mode:
                             success = self.find_and_remove_consumable_car(int(self.entry_sc.get()))
                         else:
                             success = self.sell_consumable_car(int(self.entry_sc.get()))
@@ -2071,9 +2057,6 @@ class FH_UltimateBot(ctk.CTk):
             if self.is_running:
                 self.log("流水线正在运行，请先停止后再切换自动驾驶！")
                 return
-            # 如果一键抢车面板开着，先关掉
-            if getattr(self, '_sniper_panel_visible', False):
-                self.toggle_auction_sniper_panel()
             self.top_container.pack_forget()
             self.config_frame.pack_forget()
             if hasattr(self, "delay_settings_frame"):
@@ -2092,48 +2075,6 @@ class FH_UltimateBot(ctk.CTk):
             return
         from auto_drive import AutoDrivePanel
         self.auto_drive_panel = AutoDrivePanel(self, self)
-
-    # ====== 一键抢车面板切换 ======
-    def toggle_auction_sniper_panel(self):
-        """切换一键抢车面板的显示/隐藏"""
-        if getattr(self, '_sniper_panel_visible', False):
-            self.auction_sniper_panel.force_stop()
-            self.auction_sniper_panel.pack_forget()
-            self._sniper_panel_visible = False
-            self.btn_switch_sniper.configure(text="一键抢车", fg_color="#8E44AD")
-            self.top_container.pack(before=self.bottom_frame, fill="x", padx=(18, 10), pady=(18, 10))
-            self.config_frame.pack(fill="x", padx=18, pady=(12, 6))
-            if hasattr(self, "delay_settings_frame"):
-                self.delay_settings_frame.pack(before=self.bottom_frame, fill="x", padx=18, pady=(10, 0))
-            self.calc_frame.pack(before=self.bottom_frame, fill="x", padx=18, pady=(10, 0))
-            if hasattr(self, "global_settings_frame"):
-                self.global_settings_frame.pack(before=self.bottom_frame, fill="x", padx=18, pady=(15, 0))
-        else:
-            if self.is_running:
-                self.log("流水线正在运行，请先停止后再切换一键抢车！")
-                return
-            # 如果自动驾驶面板开着，先关掉
-            if getattr(self, '_auto_panel_visible', False):
-                self.toggle_auto_drive_panel()
-            self.top_container.pack_forget()
-            self.config_frame.pack_forget()
-            if hasattr(self, "delay_settings_frame"):
-                self.delay_settings_frame.pack_forget()
-            self.calc_frame.pack_forget()
-            if hasattr(self, "global_settings_frame"):
-                self.global_settings_frame.pack_forget()
-            self._ensure_auction_sniper_panel()
-            self.auction_sniper_panel.pack(before=self.bottom_frame, fill="x", padx=18, pady=(12, 6))
-            self._sniper_panel_visible = True
-            self.btn_switch_sniper.configure(text="返回流水线", fg_color="#DA3633")
-
-    def _ensure_auction_sniper_panel(self):
-        """延迟创建一键抢车面板"""
-        if hasattr(self, 'auction_sniper_panel'):
-            return
-        from auction_sniper_panel import AuctionSniperPanel
-        self.auction_sniper_panel = AuctionSniperPanel(self, self)
-    # ================================
 
     def _enter_auto_drive_mini(self, mini_frame, mini_log_box):
         """进入自动驾驶迷你模式"""
@@ -2194,90 +2135,21 @@ class FH_UltimateBot(ctk.CTk):
         self.geometry("1348x880")
         self.center_window()
 
-    def _enter_sniper_mini(self, mini_frame, mini_log_box):
-        """进入一键抢车迷你模式"""
-        # 隐藏主界面元素
-        if hasattr(self, "top_container"):
-            self.top_container.pack_forget()
-        self.config_frame.pack_forget()
-        if hasattr(self, "global_settings_frame"):
-            self.global_settings_frame.pack_forget()
-        if hasattr(self, "calc_frame"):
-            self.calc_frame.pack_forget()
-        if hasattr(self, "delay_settings_frame"):
-            self.delay_settings_frame.pack_forget()
-        if hasattr(self, "bottom_frame"):
-            self.bottom_frame.pack_forget()
-        if hasattr(self, "auction_sniper_panel") and self._sniper_panel_visible:
-            self.auction_sniper_panel.pack_forget()
-
-        # 设置迷你日志框引用（log() 方法会同时写入）
-        self.mini_log_box = mini_log_box
-
-        # 显示迷你框架
-        mini_frame.pack(fill="both", expand=True, padx=10, pady=10)
-
-        # 计算窗口尺寸并定位到右上角
-        last_x, last_y, last_w, last_h = self.regions.get("全界面", (0, 0, self.winfo_screenwidth(), self.winfo_screenheight()))
-        if last_w <= 0:
-            last_w = self.winfo_screenwidth()
-        if last_h <= 0:
-            last_h = self.winfo_screenheight()
-
-        calc_w = max(int(last_w * 0.35), 620)
-        calc_h = 180
-        pos_x = last_x + last_w - calc_w - 20
-        pos_y = last_y + 20
-
-        self.attributes("-topmost", True)
-        self.geometry(f"{calc_w}x{calc_h}+{pos_x}+{pos_y}")
-
-    def _exit_sniper_mini(self, mini_frame):
-        """退出一键抢车迷你模式，恢复抢车全面板"""
-        mini_frame.pack_forget()
-
-        # 清除迷你日志引用
-        if hasattr(self, "mini_log_box"):
-            del self.mini_log_box
-
-        # 恢复抢车面板和底部
-        if hasattr(self, "bottom_frame"):
-            self.bottom_frame.pack(fill="both", expand=True, padx=18, pady=(6, 12))
-        if hasattr(self, "auction_sniper_panel") and self._sniper_panel_visible:
-            self.auction_sniper_panel.pack(before=self.bottom_frame, fill="x", padx=18, pady=(12, 6))
-
-        # 恢复窗口
-        self.btn_switch_sniper.configure(text="返回流水线", fg_color="#DA3633")
-        self.attributes("-topmost", False)
-        self.geometry("1348x880")
-        self.center_window()
-
-    # ==========================================
-
     def stop_all(self):
         # 检查是否是自动驾驶在运行
         auto_was_running = (hasattr(self, 'auto_drive_panel')
                             and self.auto_drive_panel.winfo_exists()
                             and self.auto_drive_panel._running)
-        # 检查是否是一键抢车在运行
-        sniper_was_running = (hasattr(self, 'auction_sniper_panel')
-                              and self.auction_sniper_panel.winfo_exists()
-                              and self.auction_sniper_panel._running)
 
         if not self.is_running:
-            # F8 全局停止也要关掉自动驾驶和一键抢车
+            # F8 全局停止也要关掉自动驾驶
             if auto_was_running:
                 self.auto_drive_panel.force_stop()
-            if sniper_was_running:
-                self.auction_sniper_panel.force_stop()
             return
 
         # 如果自动驾驶面板正在运行，先停掉（_stop 会自己恢复 UI）
         if auto_was_running:
             self.auto_drive_panel.force_stop()
-        # 如果一键抢车面板正在运行，先停掉
-        if sniper_was_running:
-            self.auction_sniper_panel.force_stop()
 
         for key in DIK_CODES.keys():
             self.hw_key_up(key)
@@ -2291,7 +2163,7 @@ class FH_UltimateBot(ctk.CTk):
             pass
 
         # 只有流水线运行时才恢复流水线 UI
-        if not auto_was_running and not sniper_was_running:
+        if not auto_was_running:
             def restore_ui():
                 if hasattr(self, "mini_frame"):
                     self.mini_frame.pack_forget()
@@ -5144,14 +5016,17 @@ class FH_UltimateBot(ctk.CTk):
         time.sleep(1.5)
 
         self.log("开始删除最近获得的车辆！！！请人工确认是否移除")
-        
+
         not_found_pages = 0
+        first_scan = True
         max_attempts = int(self.entry_sell_attempts.get())
         while self.sc_count < target_count:
             if not self.is_running:
                 return False
             self.log(f"正在严格扫描当前页面... (连续未找到: {not_found_pages}/{max_attempts})")
-            
+            if first_scan and self.var_first_esc.get():
+                self.hw_press("esc")
+            first_scan = False
             # 【使用终极安全锁】：2张图，4道防线，绝不乱删
             pos_target = self.wait_for_image_ultimate_safe(
                 main_path="removecarobject.png",  # 你要删的车的截图
@@ -5187,7 +5062,7 @@ class FH_UltimateBot(ctk.CTk):
             self.hw_press("enter")
             time.sleep(1.2)
 
-            # 渐进阈值搜索
+            # 渐进阈值搜索（快速模式，覆盖大多数用户）
             self.log("寻找 '从车库移除' 按钮...")
             found = False
             for thresh in [0.70, 0.65]:
@@ -5199,14 +5074,29 @@ class FH_UltimateBot(ctk.CTk):
                     break
 
             if not found:
+                # 全量缩放比兜底（覆盖特殊分辨率/DPI用户）
                 self.log("快速搜索均失败，尝试全量缩放比...")
-                pos_remove = self.find_image_gray("removecar.png", region=self.regions["全界面"], threshold=0.60, fast_mode=False)
-                if pos_remove:
-                    self.log("全量缩放比搜索找到移除按钮，点击...")
-                    self.game_click(pos_remove)
-                    found = True
+                for thresh in [0.65, 0.58]:
+                    pos_remove = self.find_image_gray("removecar.png", region=self.regions["全界面"], threshold=thresh, fast_mode=False)
+                    if pos_remove:
+                        self.log(f"全量缩放比找到移除按钮 (阈值 {thresh})，点击...")
+                        self.game_click(pos_remove)
+                        found = True
+                        break
 
             if not found:
+                # 失败时保存截图用于诊断
+                try:
+                    import os
+                    debug_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logs", "debug")
+                    os.makedirs(debug_dir, exist_ok=True)
+                    ts = time.strftime("%Y%m%d_%H%M%S")
+                    gx, gy, gw, gh = self.regions["全界面"]
+                    self.log(f"[Debug] 移除按钮匹配失败，保存截图到 logs/debug/remove_fail_{ts}.png | 分辨率: {gw}x{gh}")
+                    screen = self.capture_region(self.regions["全界面"])
+                    cv2.imwrite(os.path.join(debug_dir, f"remove_fail_{ts}.png"), screen)
+                except Exception:
+                    pass
                 self.log("未找到移除按钮，可能该车无法移除，按 ESC 放弃该车...")
                 self.hw_press("esc")
                 time.sleep(1.0)
